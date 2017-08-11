@@ -13,14 +13,26 @@ From Github:
 
     $ pip install --upgrade https://github.com/fg1/bib_autofile/archive/master.tar.gz
 
+
+Configuration
+=============
+
+It is possible to save parameters of the command line as default parameters in a configuration file located in ``~/.config/bib_autofile/config.ini``:
+
+.. code-block:: shell
+
+    bibfile = /home/user/documents/bibliography.bib
+    pdfsdir = /home/user/documents/pdfs
+
+
 Usage
 =====
 
 .. code-block:: shell
 
-    usage: __init__.py [-h] [-k BIBKEY] [--bibfile BIBFILE] [--pdfsdir PDFSDIR]
-                       [--pdfformat PDFFORMAT] [-o] [-r] [-d]
-                       pdf
+    usage: bib_autofile [-h] [-k BIBKEY] [--bibfile BIBFILE] [--pdfsdir PDFSDIR]
+                        [--pdfformat PDFFORMAT] [-o] [-r] [-d]
+                        pdf
 
     positional arguments:
       pdf
