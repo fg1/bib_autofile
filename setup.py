@@ -22,7 +22,7 @@ setup(
     ],
     keywords='bibtex',
     packages=find_packages(),
-    install_requires=['bibtexparser', 'clint'],
+    install_requires=['bibtexparser', 'clint', 'configargparse'],
     entry_points={
         'console_scripts': [
             'bib_autofile=bib_autofile:main',
