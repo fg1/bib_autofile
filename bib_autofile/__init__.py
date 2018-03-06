@@ -1,4 +1,4 @@
-#/usr/bin/python
+#/usr/bin/env python3
 # coding: utf-8
 
 # TODO:
@@ -13,10 +13,17 @@ import codecs
 import shutil
 import logging
 
-import bibtexparser
 from clint import resources
 from clint.textui import prompt
 import configargparse as argparse
+
+import pybtex.errors
+# Configure pybtex such that errors are silent
+pybtex.errors.set_strict_mode(False)
+def silent(*args, **kargs):
+    pass
+pybtex.errors.print_error = silent
+from pybtex.database.input import bibtex
 
 resources.init("fg1", "bib_autofile")
 logger = logging.getLogger(__name__)
@@ -37,35 +44,32 @@ def parse_args():
 
 
 def find_bibentry(args):
-    parser = bibtexparser.bparser.BibTexParser()
-    parser.ignore_nonstandard_types = False
-    parser.customization = bibtexparser.customization.convert_to_unicode
-
+    parser = bibtex.Parser()
     with codecs.open(args.bibfile, "r", "utf-8") as fhandle:
-        bdn = bibtexparser.load(fhandle, parser=parser)
+        bdn = parser.parse_file(fhandle)
 
         if args.bibkey == "last":
-            s = sorted(bdn.entries, key=lambda e: (e["timestamp"], e["ID"]), reverse=True)
+            s = sorted(bdn.entries.values(), key=lambda e: (e.fields["timestamp"], e.key), reverse=True)
             if not args.overwrite:
-                s = filter(lambda e: "file" not in e, s)
-            ltstamp = s[0]["timestamp"]
-            s = filter(lambda e: e["timestamp"] == ltstamp, s)
+                s = list(filter(lambda e: "file" not in e.fields, s))
+            ltstamp = s[0].fields["timestamp"]
+            s = list(filter(lambda e: e.fields["timestamp"] == ltstamp, s))
 
             if len(s) == 1:
-                vars(args)["bibkey"] = s[0]["ID"]
+                vars(args)["bibkey"] = s[0].key
             else:
                 choices = []
                 i = 0
                 for e in s:
-                    choices.append({"selector": i, "prompt": "%s - %s" % (e["ID"], e["title"]), "return": e["ID"]})
+                    choices.append({"selector": i, "prompt": "%s - %s" % (e.key, e.fields["title"]), "return": e.key})
                     i += 1
                 vars(args)["bibkey"] = prompt.options("Which entry?", choices)
 
         # Check that the key which is specified exists
-        if args.bibkey not in bdn.entries_dict:
+        if args.bibkey not in bdn.entries:
             logger.fatal("Couldn't find key '%s' in bibtex file" % args.bibkey)
             return None
-        return bdn.entries_dict[args.bibkey]
+        return bdn.entries[args.bibkey]
 
 
 def main():
@@ -79,14 +83,14 @@ def main():
     if e is None:
         return 1
 
-    if not args.overwrite and "file" in e:
+    if not args.overwrite and "file" in e.fields:
         logger.error("File already defined for entry '%s'. Use '-o' option for overwritting." % args.bibkey)
         return 1
 
     if args.disable_rename:
         dstfname = os.path.basename(args.pdf)
     else:
-        dstfname = re.sub(r"[^\w_\- ]", "", args.pdfformat % e)
+        dstfname = re.sub(r"[^\w_\- ]", "", args.pdfformat % {**e.fields, **{'ID': e.key}})
         dstfname += os.path.splitext(args.pdf)[1]
 
     dstpath = os.path.join(args.pdfsdir, dstfname)
@@ -99,14 +103,14 @@ def main():
         return 1
 
     ext = os.path.splitext(args.pdf)[1][1:].upper()
-    e["file"] = ":%s:%s" % (dstfname, ext)
+    e.fields["file"] = ":%s:%s" % (dstfname, ext)
 
-    fline = "file = {%s}," % e["file"]
+    fline = "file = {%s}," % e.fields["file"]
     print(fline)
     if args.dryrun:
         return 0
 
-    klook = "@%s{%s," % (e["ENTRYTYPE"], e["ID"])
+    klook = "@%s{%s," % (e.type, e.key)
     klook = klook.lower()
 
     with codecs.open(args.bibfile, "r", "utf-8") as f:

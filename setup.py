@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 from setuptools import setup, find_packages
 from codecs import open
@@ -8,7 +8,7 @@ with open('README.rst', 'r', 'utf-8') as fd:
 
 setup(
     name='bib_autofile',
-    version='0.1.0',
+    version='0.20170302',
     description='Automatically add file entry to bibtex file',
     long_description=long_description,
     url='https://github.com/fg1/bib_autofile',
@@ -22,7 +22,7 @@ setup(
     ],
     keywords='bibtex',
     packages=find_packages(),
-    install_requires=['bibtexparser', 'clint', 'configargparse'],
+    install_requires=['pybtex', 'clint', 'configargparse'],
     entry_points={
         'console_scripts': [
             'bib_autofile=bib_autofile:main',
