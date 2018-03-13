@@ -82,7 +82,8 @@ def find_bibentry(args):
         return bdn.entries[args.bibkey]
 
 
-def main(args):
+def main():
+    args = parse_args()
     if not os.path.isfile(args.ref):
         if re.match('^[0-9]{4}\.[0-9]+$', args.ref) != None:
             logger.info("Looking up arxiv reference {}...".format(args.ref))
@@ -226,5 +227,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    main()
