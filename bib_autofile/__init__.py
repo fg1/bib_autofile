@@ -1,4 +1,4 @@
-#/usr/bin/env python3
+#!/usr/bin/env python3
 # coding: utf-8
 
 # TODO:
@@ -47,51 +47,60 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_bibkeys(args):
+def parse_bibtex(args):
     parser = bibtex.Parser()
     with codecs.open(args.bibfile, "r", "utf-8") as fhandle:
         bdn = parser.parse_file(fhandle)
-    return set(bdn.entries.keys())
+    return bdn
 
-def find_bibentry(args):
-    parser = bibtex.Parser()
-    with codecs.open(args.bibfile, "r", "utf-8") as fhandle:
-        bdn = parser.parse_file(fhandle)
 
-        if args.bibkey == "last":
-            s = sorted(bdn.entries.values(), key=lambda e: (e.fields["timestamp"], e.key), reverse=True)
-            if not args.overwrite:
-                s = list(filter(lambda e: "file" not in e.fields, s))
-            ltstamp = s[0].fields["timestamp"]
-            s = list(filter(lambda e: e.fields["timestamp"] == ltstamp, s))
+def find_bibentry(args, bdn):
+    if args.bibkey == "last":
+        s = sorted(bdn.entries.values(), key=lambda e: (e.fields["timestamp"], e.key), reverse=True)
+        if not args.overwrite:
+            s = list(filter(lambda e: "file" not in e.fields, s))
+        ltstamp = s[0].fields["timestamp"]
+        s = list(filter(lambda e: e.fields["timestamp"] == ltstamp, s))
 
-            if len(s) == 1:
-                vars(args)["bibkey"] = s[0].key
-            else:
-                choices = []
-                i = 0
-                for e in s:
-                    choices.append({"selector": i, "prompt": "%s - %s" % (e.key, e.fields["title"]), "return": e.key})
-                    i += 1
-                vars(args)["bibkey"] = prompt.options("Which entry?", choices)
+        if len(s) == 1:
+            vars(args)["bibkey"] = s[0].key
+        else:
+            choices = []
+            i = 0
+            for e in s:
+                choices.append({"selector": i, "prompt": "%s - %s" % (e.key, e.fields["title"]), "return": e.key})
+                i += 1
+            vars(args)["bibkey"] = prompt.options("Which entry?", choices)
 
-        # Check that the key which is specified exists
-        if args.bibkey not in bdn.entries:
-            logger.fatal("Couldn't find key '%s' in bibtex file" % args.bibkey)
-            return None
-        return bdn.entries[args.bibkey]
+    # Check that the key which is specified exists
+    if args.bibkey not in bdn.entries:
+        logger.fatal("Couldn't find key '%s' in bibtex file" % args.bibkey)
+        return None
+    return bdn.entries[args.bibkey]
 
 
 def main():
     args = parse_args()
+    bdn = parse_bibtex(args)
+    bibkeys = set(bdn.entries.keys())
+
     if not os.path.isfile(args.ref):
         if re.match('^[0-9]{4}\.[0-9]+$', args.ref) != None:
-            logger.info("Looking up arxiv reference {}...".format(args.ref))
+            arxiv_keys = set(e.fields['eprint'] for e in bdn.entries.values() if 'eprint' in e.fields)
+            if args.ref in arxiv_keys:
+                logger.warn("arXiv reference '{}' already in bibtex file!".format(args.ref))
+                return 1
+
+            logger.info("Looking up arXiv reference '{}'...".format(args.ref))
             a = arxiv.query(id_list=[args.ref])
-            if len(a) != 1:
-                logger.fatal("Arxiv reference '{}' not found".format(args.ref))
+            if len(a) == 0:
+                logger.fatal("arXiv reference '{}' not found".format(args.ref))
+                return 1
+            if len(a) > 1:
+                logger.fatal("More than one article found for arXiv reference '{}'".format(args.ref))
                 return 1
             a = a[0]
+            logger.info("Found article: {}".format(a['title']))
 
             dp = a['published_parsed']
             now = time.localtime()
@@ -99,7 +108,6 @@ def main():
             bibkey = a['authors'][0].split(' ')
             bibkey = "{}{}".format(bibkey[1], dp.tm_year)
             # Check that we do not have a duplicate key
-            bibkeys = get_bibkeys(args)
             if bibkey in bibkeys:
                 i = 97
                 while i < 123:
@@ -139,7 +147,7 @@ def main():
 
     else:
         pdf = args.ref
-        e = find_bibentry(args)
+        e = find_bibentry(args, bdn)
         if e is None:
             return 1
         write_full_entry = False
