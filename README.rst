@@ -48,3 +48,17 @@ Usage
       -r                    Disable renaming of the PDF file
       -d                    Do not perform actions
 
+
+It is also possible to directly download a PDF from arxiv and add it to the bibtex file:
+
+.. code-block:: shell
+
+   $ bib_autofile 1312.5602
+
+
+DOI can also be searched and the corresponding bibtex entry is added in the bibtex file:
+
+.. code-block:: shell
+
+   $ bib_autofile 10.1038/nature14236
+

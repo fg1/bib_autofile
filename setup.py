@@ -8,7 +8,7 @@ with open('README.rst', 'r', 'utf-8') as fd:
 
 setup(
     name='bib_autofile',
-    version='0.20180320',
+    version='0.20181108',
     description='Automatically add file entry to bibtex file',
     long_description=long_description,
     url='https://github.com/fg1/bib_autofile',
@@ -22,7 +22,7 @@ setup(
     ],
     keywords='bibtex',
     packages=find_packages(),
-    install_requires=['pybtex', 'clint', 'configargparse', 'arxiv'],
+    install_requires=['pybtex', 'clint', 'configargparse', 'arxiv', 'habanero'],
     entry_points={
         'console_scripts': [
             'bib_autofile=bib_autofile:main',

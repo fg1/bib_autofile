@@ -27,6 +27,9 @@ def silent(*args, **kargs):
 pybtex.errors.print_error = silent
 from pybtex.database.input import bibtex
 from pybtex.database import BibliographyData, Entry
+from pybtex.database import parse_string as parse_bibtex_string
+
+from habanero import cn
 
 resources.init("fg1", "bib_autofile")
 logger = logging.getLogger(__name__)
@@ -48,6 +51,14 @@ def parse_args():
 
 
 def parse_bibtex(args):
+    if args.bibfile is None:
+        print("No bibtex file configured!")
+        sys.exit(1)
+
+    if not os.path.exists(args.bibfile):
+        print("No bibtex file found at:", args.bibfile)
+        sys.exit(1)
+
     parser = bibtex.Parser()
     with codecs.open(args.bibfile, "r", "utf-8") as fhandle:
         bdn = parser.parse_file(fhandle)
@@ -79,16 +90,41 @@ def find_bibentry(args, bdn):
     return bdn.entries[args.bibkey]
 
 
+def find_dup_entry(bdn, field, val):
+    val_ = val.lower()
+    for bibkey, e in bdn.entries.items():
+        if field in e.fields and e.fields[field].lower() == val_:
+            return bibkey, e
+
+
+def check_duplicate_key(bibkeys, bibkey):
+    # Check that we do not have a duplicate key
+    if bibkey in bibkeys:
+        i = 97
+        while i < 123:
+            if bibkey + chr(i) not in bibkeys:
+                bibkey = bibkey + chr(i)
+                break
+            i += 1
+        if i == 123:
+            bibkey = bibkey + "_" + args.ref
+    return bibkey
+
+
 def main():
     args = parse_args()
+    now = time.localtime()
     bdn = parse_bibtex(args)
     bibkeys = set(bdn.entries.keys())
 
     if not os.path.isfile(args.ref):
         if re.match('^[0-9]{4}\.[0-9]+$', args.ref) != None:
-            arxiv_keys = set(e.fields['eprint'] for e in bdn.entries.values() if 'eprint' in e.fields)
-            if args.ref in arxiv_keys:
-                logger.warn("arXiv reference '{}' already in bibtex file!".format(args.ref))
+            # Match Arxiv reference
+
+            # Check if duplicate or not
+            match = find_dup_entry(bdn, "eprint", args.ref)
+            if match is not None:
+                logger.warn("Found previous entry with same id: {}".format(match[0]))
                 return 1
 
             logger.info("Looking up arXiv reference '{}'...".format(args.ref))
@@ -103,20 +139,10 @@ def main():
             logger.info("Found article: {}".format(a['title']))
 
             dp = a['published_parsed']
-            now = time.localtime()
 
             bibkey = a['authors'][0].split(' ')
             bibkey = "{}{}".format(bibkey[1], dp.tm_year)
-            # Check that we do not have a duplicate key
-            if bibkey in bibkeys:
-                i = 97
-                while i < 123:
-                    if bibkey + chr(i) not in bibkeys:
-                        bibkey = bibkey + chr(i)
-                        break
-                    i += 1
-                if i == 123:
-                    bibkey = bibkey + "_" + args.ref
+            bibkey = check_duplicate_key(bibkeys, bibkey)
 
             bib_data = BibliographyData({
                 bibkey: Entry('Article', [
@@ -141,6 +167,42 @@ def main():
                 pdf = arxiv.download(a, dirname='/tmp/')
             logger.info("Downloaded PDF to: {}".format(pdf))
 
+
+        elif re.match('^[0-9\.]+/.+', args.ref) != None:
+            # Match DOI
+
+            # Check if duplicate or not
+            match = find_dup_entry(bdn, "doi", args.ref)
+            if match is not None:
+                logger.warn("Found previous entry with same DOI: {}".format(match[0]))
+                return 1
+
+            # Search with crossref
+            try:
+                bib_item = cn.content_negotiation(args.ref, format="bibtex")
+            except:
+                # TODO: Check for 404 error
+                print("Unable to find DOI")
+                sys.exit(1)
+            bib_data = parse_bibtex_string(bib_item, "bibtex")
+            ein = bib_data.entries.values()[0]
+            print("Found article: {}".format(ein.fields["title"]))
+
+            # Remove unnecessary fields from the bibtex file
+            fields = [('timestamp', args.timestamp_format.format(now.tm_year, now.tm_mon, now.tm_mday))]
+            for k, v in ein.fields.items():
+                if k == "url":
+                    continue
+                fields.append((k, v))
+
+            e = Entry(ein.type, fields=fields, persons=ein.persons)
+            bibkey = "{}{}".format("".join(e.persons["author"][0].last()), e.fields["year"])
+            bibkey = check_duplicate_key(bibkeys, bibkey)
+            bib_data = BibliographyData({bibkey: e})
+
+            write_full_entry = True
+            pdf = None
+
         else:
             logger.fatal("File '%s' not found" % args.ref)
             return 1
@@ -156,29 +218,30 @@ def main():
         logger.error("File already defined for entry '%s'. Use '-o' option for overwritting." % e.key)
         return 1
 
-    if args.disable_rename:
-        dstfname = os.path.basename(pdf)
-    else:
-        dstfname = re.sub(r"[^\w_\- ]", "", args.pdfformat % {**e.fields, **{'ID': e.key}})
-        dstfname += os.path.splitext(pdf)[1]
+    if pdf:
+        if args.disable_rename:
+            dstfname = os.path.basename(pdf)
+        else:
+            dstfname = re.sub(r"[^\w_\- ]", "", args.pdfformat % {**e.fields, **{'ID': e.key}})
+            dstfname += os.path.splitext(pdf)[1]
 
-    dstpath = os.path.join(args.pdfsdir, dstfname)
-    if not os.path.exists(dstpath):
-        logger.info(u"%s → %s" % (pdf, dstpath))
-        if not args.dryrun:
-            shutil.move(pdf, dstpath)
-    elif not os.path.samefile(pdf, dstpath):
-        logger.error("File already existing at %s" % dstpath)
-        return 1
+        dstpath = os.path.join(args.pdfsdir, dstfname)
+        if not os.path.exists(dstpath):
+            logger.info(u"%s → %s" % (pdf, dstpath))
+            if not args.dryrun:
+                shutil.move(pdf, dstpath)
+        elif not os.path.samefile(pdf, dstpath):
+            logger.error("File already existing at %s" % dstpath)
+            return 1
 
-    ext = os.path.splitext(pdf)[1][1:].upper()
-    e.fields["file"] = ":%s:%s" % (dstfname, ext)
+        ext = os.path.splitext(pdf)[1][1:].upper()
+        e.fields["file"] = ":%s:%s" % (dstfname, ext)
 
-    fline = "file = {%s}," % e.fields["file"]
-    if write_full_entry:
-        print(bib_data.to_string('bibtex'))
-    else:
-        print(fline)
+        fline = "file = {%s}," % e.fields["file"]
+        if write_full_entry:
+            print(bib_data.to_string('bibtex'))
+        else:
+            print(fline)
 
     if args.dryrun:
         return 0
