@@ -164,7 +164,7 @@ def main():
                 pdf = re.sub(r"[^\w_\- ]", "", a['title'])
                 pdf = os.path.join('/tmp', pdf) + '.pdf'
             else:
-                pdf = arxiv.download(a, dirname='/tmp/')
+                pdf = arxiv.download(a, dirpath='/tmp/')
             logger.info("Downloaded PDF to: {}".format(pdf))
 
 
