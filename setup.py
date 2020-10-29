@@ -8,7 +8,7 @@ with open('README.rst', 'r', 'utf-8') as fd:
 
 setup(
     name='bib_autofile',
-    version='0.20200723',
+    version='0.20201029',
     description='Automatically add file entry to bibtex file',
     long_description=long_description,
     url='https://github.com/fg1/bib_autofile',

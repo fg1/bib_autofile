@@ -117,6 +117,15 @@ def main():
     bdn = parse_bibtex(args)
     bibkeys = set(bdn.entries.keys())
 
+    # Check if the timestsamp field is set
+    err = False
+    for bibkey, e in bdn.entries.items():
+        if "timestamp" not in e.fields:
+            print(f"ERR: No timestamp field for entry '{bibkey}'")
+            err = True
+    if err:
+        sys.exit(1)
+
     if not os.path.isfile(args.ref):
         if re.match('^[0-9]{4}\.[0-9]+$', args.ref) != None:
             # Match Arxiv reference
@@ -174,7 +183,7 @@ def main():
             # Check if duplicate or not
             match = find_dup_entry(bdn, "doi", args.ref)
             if match is not None:
-                logger.warn("Found previous entry with same DOI: {}".format(match[0]))
+                logger.warning("Found previous entry with same DOI: {}".format(match[0]))
                 return 1
 
             # Search with crossref
@@ -184,8 +193,9 @@ def main():
                 # TODO: Check for 404 error
                 print("Unable to find DOI")
                 sys.exit(1)
+
             bib_data = parse_bibtex_string(bib_item, "bibtex")
-            ein = bib_data.entries.values()[0]
+            ein = next(iter(bib_data.entries.values()))
             print("Found article: {}".format(ein.fields["title"]))
 
             # Remove unnecessary fields from the bibtex file
@@ -196,7 +206,7 @@ def main():
                 fields.append((k, v))
 
             e = Entry(ein.type, fields=fields, persons=ein.persons)
-            bibkey = "{}{}".format("".join(e.persons["author"][0].last()), e.fields["year"])
+            bibkey = "{}{}".format("".join(e.persons["author"][0].last_names[0]), e.fields["year"])
             bibkey = check_duplicate_key(bibkeys, bibkey)
             bib_data = BibliographyData({bibkey: e})
 
